@@ -1,0 +1,35 @@
+{
+  "type" : "record",
+  "name" : "person",
+  "namespace": "com.cepas.avro",
+  "doc": "customer schema avro",
+  "fields" : [ {
+    "name" : "type",
+    "type" : "string",
+    "doc"  : "type of person"
+  }, {
+    "name" : "id",
+    "type" : [ "int", "null" ],
+    "doc" : "person id"
+  }, {
+    "name" : "document",
+    "type" : "string",
+    "doc" : "id card number"
+  }, {
+    "name" : "birthdate",
+    "type" : [ "string", "null" ],
+    "doc" : "birth date (YYYY-MM-DD)"
+  }, {
+    "name" : "firstname",
+    "type" : "string",
+    "doc" : "first name of the person"
+  },{
+    "name" : "middlename",
+    "type" : [ "string", "null" ],
+    "doc" : "(optional) middle name of the person"
+  }, {
+    "name" : "surname",
+    "type" : "string",
+    "doc" : "surname of the person"
+  }]
+}
