@@ -23,7 +23,7 @@ resolvers ++= Seq(
 val sparkVersion = "1.5.0-cdh5.5.0"
 
 libraryDependencies ++= Seq(
-    "org.apache.kafka" % "kafka_2.10" % "0.8.2.2"
+    "org.apache.kafka" % "kafka_2.10" % "0.8.2.1"
         exclude("javax.jms", "jms")
         exclude("com.sun.jdmk", "jmxtools")
         exclude("com.sun.jmx", "jmxri")
@@ -48,6 +48,10 @@ libraryDependencies ++= Seq(
         exclude("org.jboss.netty", "netty")
         exclude("org.slf4j", "slf4j-log4j12"),
     "commons-io" % "commons-io" % "2.4",
+    "commons-logging" % "commons-logging" % "1.2",
+    "org.apache.commons" % "commons-pool2" % "2.3",
+    // Logback with slf4j facade
+    "ch.qos.logback" % "logback-classic" % "1.1.2",
     // Test dependencies
     "org.scalatest" %% "scalatest" % "2.2.4" % "test",
     "org.mockito" % "mockito-all" % "1.9.5" % "test"

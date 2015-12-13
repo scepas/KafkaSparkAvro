@@ -1,6 +1,6 @@
 {
   "type" : "record",
-  "name" : "person",
+  "name" : "Person",
   "namespace": "com.cepas.avro",
   "doc": "customer schema avro",
   "fields" : [ {

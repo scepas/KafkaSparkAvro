@@ -3,6 +3,7 @@ package com.cepas.kafkasparkavro.avro
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericData, GenericRecord}
+import org.apache.avro.specific.SpecificData
 
 import scala.collection.JavaConverters._
 
@@ -69,17 +70,30 @@ case class GenericConverter(schema: Schema, separator: Char, dropDelims: Boolean
     //TODO: consider more data types, including decimal
     def castField(field: Schema.Field, value: String): Any = {
         val schema = field.schema()
-        //TODO: convert to case
-        val types = if (schema.getType == Type.UNION) field.schema().getTypes.asScala.toList else List(schema)
+        val types = schema.getType match {
+            case Type.UNION => field.schema().getTypes.asScala.toList
+            case _ => List(schema)
+        }
         @scala.annotation.tailrec
         def getTypeConversor(types: List[Schema]): (String => Any) = types.head.getType match {
             case Type.INT => s => s.toInt
-            case Type.LONG => s => s.toLong
             case Type.FLOAT => s => s.toFloat
             case Type.UNION => getTypeConversor(types.tail)
             case _ => s => s    //otherwise, return value in original type
         }
         getTypeConversor(types) (value)
+    }
+
+    private def toSpecific[T](rec: GenericRecord): T = {
+        SpecificData.get().deepCopy(rec.getSchema, rec).asInstanceOf[T]
+    }
+
+    def convertToSpecific[T](line: String, firstField: Int = 0): Option[T] =    {
+        val rec = convert(line, firstField)
+        if (!rec.isEmpty)
+            Some(toSpecific(rec.get))
+        else
+            None
     }
 }
 
