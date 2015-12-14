@@ -17,7 +17,9 @@ seq(sbtavro.SbtAvro.avroSettings : _*)
 
 resolvers ++= Seq(
     "typesafe-repository" at "http://repo.typesafe.com/typesafe/releases/",
-    "cloudera" at "https://repository.cloudera.com/artifactory/cloudera-repos/"
+    "cloudera" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
+    "snapshots" at "http://oss.sonatype.org/content/repositories/snapshots",
+    "releases" at "http://oss.sonatype.org/content/repositories/releases"
 )
 
 val sparkVersion = "1.5.0-cdh5.5.0"
@@ -54,7 +56,8 @@ libraryDependencies ++= Seq(
     "ch.qos.logback" % "logback-classic" % "1.1.2",
     // Test dependencies
     "org.scalatest" %% "scalatest" % "2.2.4" % "test",
-    "org.mockito" % "mockito-all" % "1.9.5" % "test"
+    "org.mockito" % "mockito-all" % "1.9.5" % "test",
+    "org.scalacheck" % "scalacheck_2.10" % "1.12.5" % "test"
 )
 
 javaOptions ++= Seq(
@@ -92,3 +95,5 @@ scalacOptions in Compile ++= Seq(
 testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports/junitxml")
 
 testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-o")
+
+testOptions in Test += Tests.Argument(TestFrameworks.ScalaCheck, "-maxSize", "10000")

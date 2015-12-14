@@ -90,10 +90,10 @@ case class GenericConverter(schema: Schema, separator: Char, dropDelims: Boolean
 
     def convertToSpecific[T](line: String, firstField: Int = 0): Option[T] =    {
         val rec = convert(line, firstField)
-        if (!rec.isEmpty)
-            Some(toSpecific(rec.get))
-        else
-            None
+        rec match {
+            case Some(r) => Some(toSpecific(r))
+            case _ => None
+        }
     }
 }
 

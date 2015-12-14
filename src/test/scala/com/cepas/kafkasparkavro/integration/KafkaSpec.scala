@@ -5,7 +5,7 @@ import java.util.Properties
 
 import com.cepas.avro.Person
 import com.cepas.kafkasparkavro.avro.GenericConverter
-import com.cepas.kafkasparkavro.kafka.ConsumerTaskContext
+import com.cepas.kafkasparkavro.kafka.{KafkaProducerApp, ConsumerTaskContext}
 import com.cepas.kafkasparkavro.logging.LazyLogging
 import com.cepas.kafkasparkavro.testing.{EmbeddedKafkaZooKeeperCluster, KafkaTopic}
 import kafka.message.MessageAndMetadata
@@ -79,7 +79,9 @@ class KafkaSpec extends FunSpec with Matchers with BeforeAndAfterEach with Given
                 c.put("producer.type", "sync")
                 c.put("client.id", "test-sync-producer")
                 c.put("request.required.acks", "1")
-                kafkaZkCluster.createProducer(topic.name, c).get
+                //val p0 = kafkaZkCluster.createProducer(topic.name, c).get
+                val p = new KafkaProducerApp(kafkaZkCluster.kafka.brokerList, c, defaultTopic = Option("testing"))
+                p
             }
 
             val out = new ByteArrayOutputStream

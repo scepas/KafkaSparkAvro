@@ -20,7 +20,8 @@ import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 case class KafkaProducerApp(brokerList: String,
                             producerConfig: Properties = new Properties,
                             defaultTopic: Option[String] = None,
-                            producer: Option[Producer[Array[Byte], Array[Byte]]] = None) {
+                            producer: Option[Producer[Array[Byte], Array[Byte]]] = None)
+    extends Serializable {
 
     type Key = Array[Byte]
     type Val = Array[Byte]

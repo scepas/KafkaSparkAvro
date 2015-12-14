@@ -4,7 +4,7 @@ import java.io.{ByteArrayOutputStream, File}
 import java.util.Properties
 
 import com.cepas.kafkasparkavro.integration.IntegrationTest
-import com.cepas.kafkasparkavro.kafka.{KafkaProducerApp, ConsumerTaskContext}
+import com.cepas.kafkasparkavro.kafka.{KafkaSink, KafkaProducerApp, ConsumerTaskContext}
 import com.cepas.kafkasparkavro.logging.LazyLogging
 import com.cepas.kafkasparkavro.testing.{EmbeddedKafkaZooKeeperCluster, KafkaTopic}
 import com.cepas.kafkasparkavro.avro.GenericConverter
@@ -78,7 +78,7 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
             conf.set("spark.streaming.unpersist", "true")
             conf
         }
-        val batchInterval = Seconds(20)
+        val batchInterval = Seconds(3)
         ssc = new StreamingContext(sparkConf, batchInterval)
 
 
@@ -92,7 +92,7 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
     }
 
     override def afterEach() {
-        kafkaZkCluster.stop()
+        //kafkaZkCluster.stop()
         terminateSparkStreaming()
     }
 
@@ -130,6 +130,7 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
                 c.put("request.required.acks", "1")
                 kafkaZkCluster.createProducer(inputTopic.name, c).get
             }
+
             And(s"a single-threaded Kafka consumer app that reads from topic $outputTopic and Avro-decodes the incoming data")
             val actualPersons = new mutable.SynchronizedQueue[GenericRecord]
             def consume(m: MessageAndMetadata[Array[Byte], Array[Byte]], c: ConsumerTaskContext): Unit = {
@@ -137,6 +138,7 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
                     null, DecoderFactory.get.binaryDecoder(m.message, null));
                 logger.info(s"Consumer thread ${c.threadId}: received person $person from ${m.topic}:${m.partition}:${m.offset}")
                 actualPersons += person
+                info("añadida persona a actualPersons")
             }
             kafkaZkCluster.createAndStartConsumer(outputTopic.name, consume)
             val waitForConsumerStartup = 1000.millis
@@ -158,7 +160,7 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
                         out.toByteArray
                     }
                     logger.info(s"Synchronously sending Person $person to topic ${producerApp.defaultTopic}")
-                    producerApp.send(bytes)
+                    producerApp.send(bytes, inputTopic.name)
             }
 
             And(s"I run a streaming job that reads persons from topic $inputTopic and writes them as-is to topic $outputTopic")
@@ -168,22 +170,28 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
 
             val sparkStreamingConsumerGroup = "spark-avro-consumer-group"
             val kafkaParams = Map[String, String](
-                //"zookeeper.connect" -> kafkaZkCluster.zookeeper.connectString,
-                //"group.id" -> sparkStreamingConsumerGroup,
+                "zookeeper.connect" -> kafkaZkCluster.zookeeper.connectString,
+                "group.id" -> sparkStreamingConsumerGroup,
                 // CAUTION: Spark's use of auto.offset.reset is DIFFERENT from Kafka's behavior!
                 // https://issues.apache.org/jira/browse/SPARK-2383
                 "auto.offset.reset" -> "smallest", // must be compatible with when/how we are writing the input data to Kafka
-                "zookeeper.connection.timeout.ms" -> "5000",
-                "metadata.broker.list" -> kafkaZkCluster.kafka.brokerList
+                "zookeeper.connection.timeout.ms" -> "1000",
+                "bootstrap.servers" -> kafkaZkCluster.kafka.brokerList
             )
 
-            val kafkaStream0 = KafkaUtils.createDirectStream[Array[Byte], Array[Byte], DefaultDecoder, DefaultDecoder](
+            /*
+            val kafkaStream = KafkaUtils.createDirectStream[Array[Byte], Array[Byte], DefaultDecoder, DefaultDecoder](
                 ssc,
                 kafkaParams,
                 Set(inputTopic.name)
-            )
-
-            val kafkaStream = kafkaStream0.map(_._2)
+            ).map(_._2)
+*/
+            val kafkaStream = KafkaUtils.createStream[Array[Byte], Array[Byte], DefaultDecoder, DefaultDecoder](
+                ssc,
+                kafkaParams,
+                Map(inputTopic.name -> 1),
+                storageLevel = StorageLevel.MEMORY_ONLY_SER
+            ).map(_._2)
 
             printValues(kafkaStream, ssc)
 
@@ -195,8 +203,10 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
                 def foreachFunc = (rdd: RDD[Array[Byte]]) => {
                     val array = rdd.collect()
                     println("---------Start Printing Results----------")
-                    for(res<-array){
-                        println(res)
+                    for(res <- array){
+                        val person: Person = new SpecificDatumReader[Person](classOf[Person]).read(
+                            null, DecoderFactory.get.binaryDecoder(res, null));
+                        println(person)
                     }
                     println("---------Finished Printing Results----------")
                 }
@@ -228,56 +238,58 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
                 unifiedStream.repartition(sparkProcessingParallelism)
             }
 */
-            //val numInputMessages = ssc.sparkContext.accumulator(0L, "Kafka messages consumed")
-            //val numOutputMessages = ssc.sparkContext.accumulator(0L, "Kafka messages produced")
-            //info(brokerList.value.toString)
-            //info(zookeeperConnect.value.toString)
-            //info("Aquí Kafka Stream:")
+            val numInputMessages = ssc.sparkContext.accumulator(0L, "Kafka messages consumed")
+            val numOutputMessages = ssc.sparkContext.accumulator(0L, "Kafka messages produced")
 
-            //kafkaStream.print()
-            //val numEvents = kafkaStream.countByWindow(Seconds(40), Seconds(40))
-            //numEvents.print()
-            //numEvents.foreachRDD(rdd => print(rdd.first()))
-            /*
+            val kafkaParams2 = Map[String, String](
+                "producer.type" -> "sync",
+                //"client.id" -> "partition-sync-producer",
+                "request.required.acks" -> "1",
+                "value.serializer" -> "org.apache.kafka.common.serialization.ByteArraySerializer",
+                "auto.offset.reset" -> "smallest",
+                "bootstrap.servers" -> brokerList.value,
+                "zookeeper.connect" -> zookeeperConnect.value
+            )
+
+            val sink = KafkaSink(brokerList.value, kafkaParams2, defaultTopic = Option("testing-output"))
+
+
             kafkaStream.foreachRDD(rdd => {
 
                 rdd.foreachPartition(partitionOfRecords => {
-                    import java.io._
-                    val pw = new PrintWriter(new File("/tmp/logSanti.txt" ))
-                    pw.write("para cada partición...")
-                    pw.write(partitionOfRecords.take(3).toString())
-                    pw.close
 
-                    //val loggerF = org.slf4j.LoggerFactory.getLogger(getClass.getName)
-                    //loggerF.info("para cada partición...")
-                    //loggerF.info(partitionOfRecords.take(3).toString())
-                })
-            })
-            */
-/*
-            kafkaStream.foreachRDD(rdd => {
-
-                rdd.foreachPartition(partitionOfRecords => {
                     val config = {
                         val c = new Properties
+                        /*
                         c.put("metadata.broker.list", brokerList.value)
                         c.put("zookeeper.connect", zookeeperConnect.value)
                         c.put("auto.offset.reset", "smallest" )
+                        */
+                        c.put("producer.type", "sync")
+                        //c.put("client.id", "test-sync-producer")
+                        c.put("request.required.acks", "1")
+                        //c.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+                        c.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
+                        c.put("auto.offset.reset", "smallest")
+                        c.put("bootstrap.servers", brokerList.value)
+                        c.put("zookeeper.connect", zookeeperConnect.value)
                         c
                     }
-                    val producerApp = new KafkaProducerApp(zookeeperConnect.value, config, defaultTopic = Option("testing-output"))
+
+                    //val producerApp2 = new KafkaProducerApp(brokerList.value, config, defaultTopic = Option("testing-output"))
+
                     partitionOfRecords.foreach { rec =>
-                        //val bytes = converter.value.apply(tweet)
-                        producerApp.send(rec)
+                        //producerApp2.send(rec, "testing-output")
+                        sink.send(null, rec, Some("testing-output"))
                         numOutputMessages += 1
+                        println("enviado mensaje")
                     }
                 })
             })
-*/
-            //seguir por aquí. Aunque no se cumple el test parece que no peta...
+
 
             ssc.start()
-            ssc.awaitTerminationOrTimeout(2)
+            ssc.awaitTerminationOrTimeout(5)
 
             Then("the Spark Streaming job should consume all persons from Kafka")
             //numInputMessages.value should be(persons.size)
@@ -285,12 +297,11 @@ class KafkaSparkSpec extends FeatureSpec with Matchers with BeforeAndAfterEach w
             //numOutputMessages.value should be(persons.size)
             And("the Kafka consumer app should receive the original persons from the Spark Streaming job")
 
-            val waitToReadSparkOutput = 1000.millis
+            val waitToReadSparkOutput = 5000.millis
             logger.debug(s"Waiting $waitToReadSparkOutput for Kafka consumer to read Spark Streaming output from Kafka")
             Thread.sleep(waitToReadSparkOutput.toMillis)
+
             actualPersons.toSeq should be(persons.toSeq)
-
-
             // Cleanup
             producerApp.shutdown()
         }
