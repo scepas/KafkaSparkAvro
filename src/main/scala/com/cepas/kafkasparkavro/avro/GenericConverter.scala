@@ -1,5 +1,7 @@
 package com.cepas.kafkasparkavro.avro
 
+import java.math.MathContext
+
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.{GenericData, GenericRecord}
@@ -12,7 +14,7 @@ import scala.collection.JavaConverters._
   */
 case class GenericConverter(schema: Schema, separator: Char, dropDelims: Boolean = false) {
 
-    val regex: String = createRegex(separator, dropDelims)
+    lazy val regex: String = createRegex(separator, dropDelims)
 
     /**
       * Converts a line of text into an avro record
@@ -36,19 +38,18 @@ case class GenericConverter(schema: Schema, separator: Char, dropDelims: Boolean
             Some(record)
         }
         catch {
-            case ex: Exception => {
+            case ex: Exception =>
                 println("Error parsing line: " + line.toString)
                 println()
                 ex.printStackTrace()
                 None
-            }
         }
     }
 
     /**
       * Split line by a separator, optionally removing quotes
-      * @param separator
-      * @param dropQuotes
+      * @param separator: separator character used to split the line
+      * @param dropQuotes: remove double quotes in fields
       * @return
       */
     def createRegex(separator: Char, dropQuotes: Boolean = false): String  = {
@@ -63,25 +64,36 @@ case class GenericConverter(schema: Schema, separator: Char, dropDelims: Boolean
 
     /**
       * Cast a string value to a type defined in an avro field
-      * @param field
-      * @param value
+      * @param field: avro field
+      * @param value: string value to cast
       * @return value casted to the proper type
       */
-    //TODO: consider more data types, including decimal
+    //TODO: consider more data types
     def castField(field: Schema.Field, value: String): Any = {
-        val schema = field.schema()
-        val types = schema.getType match {
-            case Type.UNION => field.schema().getTypes.asScala.toList
-            case _ => List(schema)
+        if (field.getProp("logicalType") == "decimal")  {
+            castDecimal(field, value)
         }
-        @scala.annotation.tailrec
-        def getTypeConversor(types: List[Schema]): (String => Any) = types.head.getType match {
-            case Type.INT => s => s.toInt
-            case Type.FLOAT => s => s.toFloat
-            case Type.UNION => getTypeConversor(types.tail)
-            case _ => s => s    //otherwise, return value in original type
+        else {
+            val schema = field.schema()
+            val types = schema.getType match {
+                case Type.UNION => field.schema().getTypes.asScala.toList
+                case _ => List(schema)
+            }
+            @scala.annotation.tailrec
+            def getTypeConversor(types: List[Schema]): (String => Any) = types.head.getType match {
+                case Type.INT => s => s.toInt
+                case Type.FLOAT => s => s.toFloat
+                case Type.UNION => getTypeConversor(types.tail)
+                case _ => s => s //otherwise, return value in original type
+            }
+            getTypeConversor(types)(value)
         }
-        getTypeConversor(types) (value)
+    }
+
+    private def castDecimal(field: Schema.Field, value: String): Any = {
+        val defaultPrecision = 10
+        val precision = field.getJsonProp("precision").asInt(defaultPrecision)
+        new java.math.BigDecimal(value, new java.math.MathContext(precision))
     }
 
     private def toSpecific[T](rec: GenericRecord): T = {

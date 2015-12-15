@@ -23,8 +23,11 @@ resolvers ++= Seq(
 )
 
 val sparkVersion = "1.5.0-cdh5.5.0"
+val bijectionVersion = "0.8.1"
 
 libraryDependencies ++= Seq(
+    "com.twitter" %% "bijection-core" % bijectionVersion,
+    "com.twitter" %% "bijection-avro" % bijectionVersion,
     "org.apache.kafka" % "kafka_2.10" % "0.8.2.1"
         exclude("javax.jms", "jms")
         exclude("com.sun.jdmk", "jmxtools")
@@ -57,7 +60,7 @@ libraryDependencies ++= Seq(
     // Test dependencies
     "org.scalatest" %% "scalatest" % "2.2.4" % "test",
     "org.mockito" % "mockito-all" % "1.9.5" % "test",
-    "org.scalacheck" % "scalacheck_2.10" % "1.12.5" % "test"
+    "org.scalacheck" %% "scalacheck" % "1.12.5" % "test"
 )
 
 javaOptions ++= Seq(

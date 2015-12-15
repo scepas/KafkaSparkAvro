@@ -31,5 +31,12 @@
     "name" : "surname",
     "type" : "string",
     "doc" : "surname of the person"
+  }, {
+    "name" : "savings",
+    "type" : ["bytes", "null"],
+    "logicalType" : "decimal",
+    "precision": 12,
+    "scale": 4,
+    "doc" : "savings in euros"
   }]
 }
